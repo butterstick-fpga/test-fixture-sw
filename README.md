@@ -1,6 +1,7 @@
-# ButterStick bootloader
+# ButterStick Test Software
 
-A LiteX project to build the DFU bootloader used on the ButterStick FPGA board.
+- LiteX project to facilitate tests on the ButterStick FPGA PCB
+- Software stack for performing those tests
 
  ---
 
