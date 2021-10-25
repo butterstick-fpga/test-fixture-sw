@@ -19,6 +19,9 @@ class PDM(Module):
 
 class Leds(Module, AutoCSR):
     def __init__(self, anode, cathode):
+
+        # Dummy CSR to make SW happy
+        self._out = CSR(7)
         
         count = Signal(3, reset=1)
         prescale = Signal(max=300)
