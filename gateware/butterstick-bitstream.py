@@ -43,63 +43,42 @@ from rtl.rgb import Leds
 
 # CRG ---------------------------------------------------------------------------------------------
 
-class CRG(Module):
+class _CRG(Module):
     def __init__(self, platform, sys_clk_freq):
-        self.clock_domains.cd_init     = ClockDomain()
-        self.clock_domains.cd_por      = ClockDomain(reset_less=True)
-        self.clock_domains.cd_sys      = ClockDomain()
-        self.clock_domains.cd_usb      = ClockDomain()
-        self.clock_domains.cd_sys2x    = ClockDomain()
-        self.clock_domains.cd_sys2x_i  = ClockDomain()
-
+        self.rst = Signal()
+        self.clock_domains.cd_init    = ClockDomain()
+        self.clock_domains.cd_por     = ClockDomain(reset_less=True)
+        self.clock_domains.cd_sys     = ClockDomain()
+        self.clock_domains.cd_sys2x   = ClockDomain()
+        self.clock_domains.cd_sys2x_i = ClockDomain(reset_less=True)
 
         # # #
 
-        self.stop = Signal()
+        self.stop  = Signal()
         self.reset = Signal()
 
-        
-        # Use OSCG for generating por clocks.
-        osc_g = Signal()
-        self.specials += Instance("OSCG",
-            p_DIV=7, # 38MHz
-            o_OSC=osc_g
-        )
-
-        # Clk
+        # Clk / Rst
         clk30 = platform.request("clk30")
-        por_done  = Signal()
+        rst_n = platform.request("user_btn", 0)
         platform.add_period_constraint(clk30, period_ns(30e6))
+        platform.add_period_constraint(ClockSignal('jtag'), period_ns(50e6))
 
-        sys2x_clk_ecsout = Signal()
-        self.submodules.pll = pll = ECP5PLL()
-
-        # Power on reset 10ms.
-        por_count = Signal(24, reset=int(30e6 * 10e-3))
-        self.comb += self.cd_por.clk.eq(osc_g)
-        self.comb += por_done.eq(pll.locked & (por_count == 0))
+        # Power on reset
+        por_count = Signal(16, reset=2**16-1)
+        por_done  = Signal()
+        self.comb += self.cd_por.clk.eq(clk30)
+        self.comb += por_done.eq(por_count == 0)
         self.sync.por += If(~por_done, por_count.eq(por_count - 1))
 
-        usb_por_done = Signal()
-        usb_por_count = Signal(24, reset=int(60e6 * 10e-3))
-        self.comb += usb_por_done.eq(usb_por_count == 0)
-        self.comb += self.cd_usb.clk.eq(self.cd_sys.clk)
-        self.comb += self.cd_usb.rst.eq(~usb_por_done)
-
-        self.sync.init += If(~usb_por_done, usb_por_count.eq(usb_por_count - 1))
-
-
         # PLL
+        self.submodules.pll = pll = ECP5PLL()
+        self.comb += pll.reset.eq(~por_done | ~rst_n | self.rst)
         pll.register_clkin(clk30, 30e6)
-        pll.create_clkout(self.cd_sys2x_i, 2*sys_clk_freq, with_reset=False)
-        pll.create_clkout(self.cd_init, 30e6, with_reset=False)
+        pll.create_clkout(self.cd_sys2x_i, 2*sys_clk_freq)
+        pll.create_clkout(self.cd_init,   25e6)
         self.specials += [
-            Instance("ECLKBRIDGECS",
-                i_CLK0   = self.cd_sys2x_i.clk,
-                i_SEL    = 0,
-                o_ECSOUT = sys2x_clk_ecsout),
             Instance("ECLKSYNCB",
-                i_ECLKI = sys2x_clk_ecsout,
+                i_ECLKI = self.cd_sys2x_i.clk,
                 i_STOP  = self.stop,
                 o_ECLKO = self.cd_sys2x.clk),
             Instance("CLKDIVF",
@@ -108,13 +87,10 @@ class CRG(Module):
                 i_CLKI    = self.cd_sys2x.clk,
                 i_RST     = self.reset,
                 o_CDIVX   = self.cd_sys.clk),
-            AsyncResetSynchronizer(self.cd_init,  ~por_done | ~pll.locked),
-            AsyncResetSynchronizer(self.cd_sys,   ~por_done | ~pll.locked | self.reset),
-            AsyncResetSynchronizer(self.cd_sys2x, ~por_done | ~pll.locked | self.reset),
-            AsyncResetSynchronizer(self.cd_sys2x_i, ~por_done | ~pll.locked | self.reset),
+            AsyncResetSynchronizer(self.cd_sys,    ~pll.locked | self.reset),
+            AsyncResetSynchronizer(self.cd_sys2x,  ~pll.locked | self.reset),
         ]
 
-    
 
 
 # BaseSoC ------------------------------------------------------------------------------------------
@@ -150,7 +126,10 @@ class BaseSoC(SoCCore):
         SoCCore.__init__(self, platform, clk_freq=sys_clk_freq, csr_data_width=32, integrated_rom_size=32*1024, integrated_sram_size=16*1024, uart_name='jtag_uart')        
         
         # CRG --------------------------------------------------------------------------------------
-        self.submodules.crg = crg = CRG(platform, sys_clk_freq)
+        self.submodules.crg = crg = _CRG(platform, sys_clk_freq)
+
+        # JTAGG ------------------------------------------------------------------------------------
+        #self.add_jtagbone()
 
         # VCCIO Control ----------------------------------------------------------------------------
         vccio_pins = platform.request("vccio_ctrl")
@@ -177,9 +156,17 @@ class BaseSoC(SoCCore):
 
 
         # Leds -------------------------------------------------------------------------------------
+        # led = platform.request("led_rgb_multiplex")
+        # self.submodules.leds = Leds(led.a, led.c)
+        # self.add_csr("leds")
+
+        from litex.soc.cores.led import LedChaser
         led = platform.request("led_rgb_multiplex")
-        self.submodules.leds = Leds(led.a, led.c)
-        self.add_csr("leds")
+        self.comb += led.c.eq(0b010) # Blue.
+        self.submodules.leds = LedChaser(
+            pads         = led.a,
+            sys_clk_freq = sys_clk_freq)
+
 
         # Self Reset -------------------------------------------------------------------------------
         rst = Signal()
