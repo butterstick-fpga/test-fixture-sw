@@ -36,7 +36,7 @@ jobs:
         
     - name: Patch
       working-directory: ./gateware/deps
-      run: git apply --verbose --directory=gateware/deps/litex litex-pull-797.diff
+      run: git apply --verbose --directory=gateware/deps/litex 001-litex-jtagg-support.diff
 
     - name: Litex build
       working-directory: ./gateware
