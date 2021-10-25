@@ -1,0 +1,157 @@
+diff --git a/litex/build/openocd.py b/litex/build/openocd.py
+index 052b622f..9c3b06d2 100644
+--- a/litex/build/openocd.py
++++ b/litex/build/openocd.py
+@@ -139,8 +139,8 @@ proc jtagstream_serve {tap port} {
+         write_to_file("stream.cfg", cfg)
+         script = "; ".join([
+             "init",
+-            "irscan $_CHIPNAME.tap {:d}".format(0x1 + chain),
+-            "jtagstream_serve $_CHIPNAME.tap {:d}".format(port),
++            "irscan ecp5.tap 0x32",
++            "jtagstream_serve ecp5.tap {:d}".format(port),
+             "exit",
+         ])
+         config = self.find_config()
+diff --git a/litex/soc/cores/jtag.py b/litex/soc/cores/jtag.py
+index 2fadcce0..bbd49118 100644
+--- a/litex/soc/cores/jtag.py
++++ b/litex/soc/cores/jtag.py
+@@ -85,6 +85,46 @@ class USJTAG(XilinxJTAG):
+     def __init__(self, *args, **kwargs):
+         XilinxJTAG.__init__(self, primitive="BSCANE2", *args, **kwargs)
+ 
++# ECP5 JTAG ----------------------------------------------------------------------------------------
++
++class ECP5JTAG(Module):
++    def __init__(self):
++        self.reset   = Signal()
++        self.capture = Signal()
++        self.shift   = Signal()
++        self.update  = Signal()
++
++        self.tck = Signal()
++        self.tdi = Signal()
++        self.tdo = Signal()
++
++        jce1 = Signal()
++        jce2 = Signal()
++        rst_n = Signal()
++
++        # # #
++
++        _capture = Signal()
++        _last_capture = Signal()
++
++        self.comb += _capture.eq(jce1)
++        self.sync.jtag += _last_capture.eq(_capture)
++        self.comb += self.capture.eq(~_last_capture & _capture)
++        self.comb += self.reset.eq(0)
++
++        self.specials += Instance("JTAGG",
++            o_JRSTN   = rst_n,
++            o_JSHIFT  = self.shift,
++            o_JUPDATE = self.update,
++
++            o_JTCK  = self.tck,
++            o_JTDI  = self.tdi,
++            o_JCE1  = jce1,
++            o_JCE2  = jce2,
++            i_JTDO1 = self.tdo,
++            i_JTDO2 = 0,
++        )
++
+ # JTAG PHY -----------------------------------------------------------------------------------------
+ 
+ class JTAGPHY(Module):
+@@ -113,7 +153,7 @@ class JTAGPHY(Module):
+ 
+         valid = Signal()
+         data  = Signal(data_width)
+-        count = Signal(max=data_width)
++        count = Signal(max=data_width+1)
+ 
+         # JTAG TAP ---------------------------------------------------------------------------------
+         if jtag is None:
+@@ -123,10 +163,12 @@ class JTAGPHY(Module):
+                 jtag = S7JTAG(chain=chain)
+             elif device[:4] in ["xcku", "xcvu"]:
+                 jtag = USJTAG(chain=chain)
++            elif device[:6] == "LFE5UM":
++                jtag = ECP5JTAG()
+             else:
+                 raise NotImplementedError
+             self.submodules.jtag = jtag
+-
++        
+         # JTAG clock domain ------------------------------------------------------------------------
+         self.clock_domains.cd_jtag = ClockDomain()
+         self.comb += ClockSignal("jtag").eq(jtag.tck)
+@@ -134,9 +176,9 @@ class JTAGPHY(Module):
+ 
+         # JTAG clock domain crossing ---------------------------------------------------------------
+         if clock_domain != "jtag":
+-            tx_cdc = stream.AsyncFIFO([("data", data_width)], 4)
++            tx_cdc = stream.AsyncFIFO([("data", data_width)], 128, buffered=True)
+             tx_cdc = ClockDomainsRenamer({"write": clock_domain, "read": "jtag"})(tx_cdc)
+-            rx_cdc = stream.AsyncFIFO([("data", data_width)], 4)
++            rx_cdc = stream.AsyncFIFO([("data", data_width)], 128, buffered=True)
+             rx_cdc = ClockDomainsRenamer({"write": "jtag", "read": clock_domain})(rx_cdc)
+             self.submodules.tx_cdc = tx_cdc
+             self.submodules.rx_cdc = rx_cdc
+@@ -152,31 +194,36 @@ class JTAGPHY(Module):
+         fsm = ResetInserter()(fsm)
+         self.submodules += fsm
+         self.comb += fsm.reset.eq(jtag.reset | jtag.capture)
++
+         fsm.act("XFER-READY",
+             jtag.tdo.eq(source.ready),
+-            If(jtag.shift,
+-                sink.ready.eq(jtag.tdi),
+-                NextValue(valid, sink.valid),
+-                NextValue(data,  sink.data),
++            If(count != 0,
++                source.valid.eq(jtag.tdi),
+                 NextValue(count, 0),
+-                NextState("XFER-DATA")
+-            )
+-        )
+-        fsm.act("XFER-DATA",
+-            jtag.tdo.eq(data),
++            ),
+             If(jtag.shift,
+-                NextValue(count, count + 1),
+-                NextValue(data, Cat(data[1:], jtag.tdi)),
+-                If(count == (data_width - 1),
+-                    NextState("XFER-VALID")
+-                )
++                NextState("XFER-DATA-SETUP"),
+             )
+         )
+-        fsm.act("XFER-VALID",
+-            jtag.tdo.eq(valid),
+-            If(jtag.shift,
+-                source.valid.eq(jtag.tdi),
+-                NextState("XFER-READY")
++
++        fsm.act("XFER-DATA-SETUP",
++            jtag.tdo.eq(sink.data),
++            sink.ready.eq(jtag.tdi),
++            NextValue(valid, sink.valid),
++            NextValue(data,  sink.data),
++            NextValue(count, 0),
++            NextState("XFER-DATA")
++        )
++        
++        fsm.act("XFER-DATA",
++            jtag.tdo.eq(data[1]),
++            NextValue(count, count + 1),
++            NextValue(data, Cat(data[1:], jtag.tdi)),
++            If(count == (data_width-1),
++                jtag.tdo.eq(valid),
++                NextState("XFER-READY"),
+             )
++        
+         )
++
+         self.comb += source.data.eq(data)
