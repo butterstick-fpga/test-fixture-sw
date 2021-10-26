@@ -37,6 +37,12 @@ from litex.soc.cores.clock.common import period_ns
 from litex.soc.cores.gpio import GPIOOut, GPIOIn
 from litex.soc.cores.spi_flash import SpiFlashDualQuad
 
+
+from litedram.modules import MT41K256M16
+from litedram.phy import ECP5DDRPHY
+
+from liteeth.phy.ecp5rgmii import LiteEthPHYRGMII
+
 from rtl.platform import butterstick_r1d0
 from rtl.rgb import Leds
 
@@ -61,7 +67,7 @@ class _CRG(Module):
         clk30 = platform.request("clk30")
         rst_n = platform.request("user_btn", 0)
         platform.add_period_constraint(clk30, period_ns(30e6))
-        platform.add_period_constraint(ClockSignal('jtag'), period_ns(50e6))
+        platform.add_period_constraint(ClockSignal('jtag'), period_ns(20e6))
 
         # Power on reset
         por_count = Signal(16, reset=2**16-1)
@@ -123,13 +129,13 @@ class BaseSoC(SoCCore):
         # platform.add_extension(butterstick_r1d0._uart_debug)
 
         # SoCCore ----------------------------------------------------------------------------------
-        SoCCore.__init__(self, platform, clk_freq=sys_clk_freq, csr_data_width=32, integrated_rom_size=32*1024, integrated_sram_size=16*1024, uart_name='jtag_uart')        
+        SoCCore.__init__(self, platform, clk_freq=sys_clk_freq, csr_data_width=32, integrated_rom_size=32*1024, integrated_sram_size=16*1024, uart_name='crossover')        
         
         # CRG --------------------------------------------------------------------------------------
         self.submodules.crg = crg = _CRG(platform, sys_clk_freq)
 
-        # JTAGG ------------------------------------------------------------------------------------
-        #self.add_jtagbone()
+        # JTAG -------------------------------------------------------------------------------------
+        self.add_jtagbone()
 
         # VCCIO Control ----------------------------------------------------------------------------
         vccio_pins = platform.request("vccio_ctrl")
@@ -167,6 +173,24 @@ class BaseSoC(SoCCore):
             pads         = led.a,
             sys_clk_freq = sys_clk_freq)
 
+
+        self.submodules.ddrphy = ECP5DDRPHY(
+            platform.request("ddram"),
+            sys_clk_freq=sys_clk_freq)
+        self.comb += self.crg.stop.eq(self.ddrphy.init.stop)
+        self.comb += self.crg.reset.eq(self.ddrphy.init.reset)
+        self.add_sdram("sdram",
+            phy           = self.ddrphy,
+            module        = MT41K256M16(sys_clk_freq, "1:2"),
+            l2_cache_size = kwargs.get("l2_size", 8192)
+        )
+
+        # Ethernet / Etherbone ---------------------------------------------------------------------
+        #self.submodules.ethphy = LiteEthPHYRGMII(
+        #    clock_pads = self.platform.request("eth_clocks"),
+        #    pads       = self.platform.request("eth"))
+        #self.add_ethernet(phy=self.ethphy)
+        
 
         # Self Reset -------------------------------------------------------------------------------
         rst = Signal()

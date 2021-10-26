@@ -28,10 +28,12 @@ _butterstick_r1d0_io = [
         IOStandard("LVCMOS18"),Misc("SLEWRATE=FAST")
     ),   
 
-    ("eth_clk", 0,
+    # RGMII Ethernet
+    ("eth_clocks", 0,
         Subsignal("tx", Pins("E15")),
         Subsignal("rx", Pins("D11")),
-        IOStandard("LVCMOS33"),Misc("SLEWRATE=FAST"),
+        IOStandard("LVCMOS33"),
+        Misc("SLEWRATE=FAST"),
     ),
 
     ("eth", 0,
@@ -42,8 +44,9 @@ _butterstick_r1d0_io = [
         Subsignal("tx_ctl",  Pins("D15")),
         Subsignal("rx_ctl",  Pins("B18")),
         Subsignal("tx_data", Pins("C15 B16 A18 B19")),
-        IOStandard("LVCMOS33"),Misc("SLEWRATE=FAST")
-    ),   
+        IOStandard("LVCMOS33"),
+        Misc("SLEWRATE=FAST")
+    ),
 
 
     ("ddram", 0,
