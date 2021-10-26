@@ -22,3 +22,6 @@
 [submodule "gateware/deps/litedram"]
 	path = gateware/deps/litedram
 	url = https://github.com/enjoy-digital/litedram
+[submodule "gateware/deps/liteiclink"]
+	path = gateware/deps/liteiclink
+	url = https://github.com/enjoy-digital/liteiclink
