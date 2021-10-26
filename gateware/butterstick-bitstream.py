@@ -186,10 +186,10 @@ class BaseSoC(SoCCore):
         )
 
         # Ethernet / Etherbone ---------------------------------------------------------------------
-        #self.submodules.ethphy = LiteEthPHYRGMII(
-        #    clock_pads = self.platform.request("eth_clocks"),
-        #    pads       = self.platform.request("eth"))
-        #self.add_ethernet(phy=self.ethphy)
+        self.submodules.ethphy = LiteEthPHYRGMII(
+           clock_pads = self.platform.request("eth_clocks"),
+           pads       = self.platform.request("eth"))
+        self.add_ethernet(phy=self.ethphy)
         
 
         # Self Reset -------------------------------------------------------------------------------
