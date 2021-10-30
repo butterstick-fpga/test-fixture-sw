@@ -68,7 +68,7 @@ def log(logtype, message, result=None):
         output_log.append(f'INFO: {message}')
         print(f'INFO: {message}')
     elif logtype == "test":
-        s = f'TEST: {message:20s}{result}'
+        s = f'TEST: {message:30s}{result}'
         output_log.append(s)
 
         if result == "OK":
@@ -81,15 +81,24 @@ def log(logtype, message, result=None):
         serial_log.append(message)
         #print(message)
 
+   
 def load_bitstream():
     # Load test-bitstream over JTAG
     print("-- Loading test bitstream into SRAM..")
 
     # check device type
     cmd = subprocess.Popen(["ecpprog", "-t"],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-    (cmd_stdout, cmd_stderr) = cmd.communicate()
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    #(cmd_stdout, cmd_stderr) = cmd.communicate()
+    cmd_stdout = b''
+    for line in cmd.stdout: 
+        line = bytes(line, 'ascii')
+        cmd_stdout += line
+        #print(line.decode(), end='')
+    cmd.stdout.close()
+    return_code = cmd.wait()
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, ["ecpprog", "-t"])
 
     ecp_device = re.findall("LFE[\w-]+", cmd_stdout.decode('ascii'))
 
@@ -106,7 +115,11 @@ def load_bitstream():
     cmd = subprocess.Popen(["ecpprog", "-S", test_bitstream],
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
-    (cmd_stdout, cmd_stderr) = cmd.communicate()
+    #(cmd_stdout, cmd_stderr) = cmd.communicate()
+    for line in cmd.stdout:
+        print(line.decode(), end='')
+    cmd.stdout.close()
+    return_code = cmd.wait()
 
 load_bitstream()
 
@@ -216,8 +229,25 @@ def read_adc(channel) -> float:
     f.purge_buffers()
     return value * (3.33 / 1024.0)
 
-for i in range(8):
-    print(f'{0} -> {read_adc(i):0.2f}')
+
+voltage_rails = [
+    ("eth_core", 1.2),
+    ("vccio1", 3.3),
+    ("fpga_core", 1.2),
+    ("vccio0", 3.3),
+    ("vccio2", 1.8),
+    ("vcc", 3.3),
+    ("ddr3l", 1.35),
+    ("fpga_aux", 2.5)
+]
+
+for i, rail in enumerate(voltage_rails):
+    name, voltage = rail
+    read_voltage = read_adc(i)
+    if abs(voltage - read_voltage) < (read_voltage * 0.05):
+        log("test", f"{name:10s}: {read_voltage:0.2f} ({100 * ((voltage - read_voltage) / read_voltage):0.01f}%)", "OK")
+    else:
+        log("test", f"{name:10s} {voltage} != {read_voltage:0.2f}", "FAIL")
     ...
 
 
