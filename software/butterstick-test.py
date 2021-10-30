@@ -120,18 +120,31 @@ j.write_ir(BitSequence(0x32, msb=False, length=8))
 
 
 while 1:
+    # shift out ~4k bits
+    seq = BitSequence()
+    for n in range(200):
+        seq.append(BitSequence(0x001, msb=False, length=10))
+
     j.change_state('shift_dr')
-    v = j.shift_register(BitSequence(0x201 | (ord('a') << 1), msb=False, length=10))
+    seq = j.shift_register(seq)
     j.change_state('pause_dr')
-    v.reverse()
     
-    if v[9]:
-        v.lsr(1)
-        b = v.tobytes(msb=True)
-        try:
-            print(b.decode('ascii')[0], end='')
-        except:
-            ...
+    for n in range(200):
+        v = seq[10*n:10*(n+1)]
+        v.reverse()
+        if v[0]:
+            v.lsr(1)
+            b = v.tobytes(msb=True)
+            try:
+                print(b.decode('ascii')[0], end='')
+            except:
+                ...
+    #    seq.append(BitSequence(0x001 | (ord('a') << 1), msb=False, length=10))
+
+
+    #print(v)
+    
+
     
 j.close()
 
