@@ -48,8 +48,6 @@ def finish(result):
 
     t = localtime()
     current_time = strftime("%Y-%m-%d-%H:%M:%S", t)
-    #print(current_time)
-
 
     f= open(f"log/{result}-{current_time}.txt","w+")
     for l in output_log:
@@ -126,7 +124,6 @@ load_bitstream()
 
 
 # Bitstream running, connect to it via JTAG
-
 def jtag_uart():
     j = jtag.JtagEngine()
     j.configure('ftdi:///1')
@@ -167,6 +164,9 @@ j.reset()
 
 f = j.controller.ftdi
 
+jtag_uart()
+
+
 spi_clk = 0x02
 spi_cipo = 0x04
 spi_copi = 0x08
@@ -182,8 +182,6 @@ def write_gpio(ftdi, data: int) -> bytes:
 
 def read_gpio(ftdi) -> bytes:
     return bytes([ftdi.GET_BITS_HIGH])
-
-
 
 # Get GPIO port to manage extra pins, use A*BUS4 as GPO, A*BUS4 as GPI
 #gpio = spi.get_gpio()
@@ -202,10 +200,6 @@ def xfer_byte(b) -> bytes:
             r += write_gpio(f, spi_clk)
         r += read_gpio(f)
     return r
-
-    
-
-
 
 def read_adc(channel) -> float:
     cmd = bytes()
@@ -248,7 +242,7 @@ for i, rail in enumerate(voltage_rails):
         log("test", f"{name:10s}: {read_voltage:0.2f} ({100 * ((voltage - read_voltage) / read_voltage):0.01f}%)", "OK")
     else:
         log("test", f"{name:10s} {voltage} != {read_voltage:0.2f}", "FAIL")
-    ...
+
 
 
 finish("PASS")
