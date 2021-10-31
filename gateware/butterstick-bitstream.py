@@ -45,6 +45,7 @@ from liteeth.phy.ecp5rgmii import LiteEthPHYRGMII
 
 from rtl.platform import butterstick_r1d0
 from rtl.rgb import Leds
+from rtl.vccio import VccIo
 
 
 # CRG ---------------------------------------------------------------------------------------------
@@ -129,31 +130,13 @@ class BaseSoC(SoCCore):
         # platform.add_extension(butterstick_r1d0._uart_debug)
 
         # SoCCore ----------------------------------------------------------------------------------
-        SoCCore.__init__(self, platform, clk_freq=sys_clk_freq, csr_data_width=32, integrated_rom_size=32*1024, integrated_sram_size=16*1024, uart_name='crossover')        
+        SoCCore.__init__(self, platform, clk_freq=sys_clk_freq, csr_data_width=32, integrated_rom_size=32*1024, integrated_sram_size=16*1024, uart_name='jtag_uart')        
         
         # CRG --------------------------------------------------------------------------------------
         self.submodules.crg = crg = _CRG(platform, sys_clk_freq)
 
-        # JTAG -------------------------------------------------------------------------------------
-        self.add_jtagbone()
-
         # VCCIO Control ----------------------------------------------------------------------------
-        vccio_pins = platform.request("vccio_ctrl")
-        pwm_timer = Signal(14)
-        self.sync += pwm_timer.eq(pwm_timer + 1)
-        self.comb += [
-            vccio_pins.pdm[0].eq(pwm_timer < int(2**14 * (0.13))),  # 3.3v
-            vccio_pins.pdm[1].eq(pwm_timer < int(2**14 * (0.13))),  # 3.3v
-            vccio_pins.pdm[2].eq(pwm_timer < int(2**14 * (0.70))),  # 1.8v
-        ]
-        counter = Signal(32)
-        self.sync += [
-            If(counter[16] == 0,
-                counter.eq(counter + 1),
-            ).Else(
-                vccio_pins.en.eq(1),
-            )
-        ]
+        self.submodules.vccio = VccIo(platform.request("vccio_ctrl"))
 
         # SPI Flash --------------------------------------------------------------------------------
         from litespi.modules import W25Q128JV
@@ -162,16 +145,16 @@ class BaseSoC(SoCCore):
 
 
         # Leds -------------------------------------------------------------------------------------
-        # led = platform.request("led_rgb_multiplex")
-        # self.submodules.leds = Leds(led.a, led.c)
-        # self.add_csr("leds")
-
-        from litex.soc.cores.led import LedChaser
         led = platform.request("led_rgb_multiplex")
-        self.comb += led.c.eq(0b010) # Blue.
-        self.submodules.leds = LedChaser(
-            pads         = led.a,
-            sys_clk_freq = sys_clk_freq)
+        self.submodules.leds = Leds(led.a, led.c)
+        self.add_csr("leds")
+
+        # from litex.soc.cores.led import LedChaser
+        # led = platform.request("led_rgb_multiplex")
+        # self.comb += led.c.eq(0b010) # Blue.
+        # self.submodules.leds = LedChaser(
+        #     pads         = led.a,
+        #     sys_clk_freq = sys_clk_freq)
 
 
         self.submodules.ddrphy = ECP5DDRPHY(
@@ -213,10 +196,6 @@ def main():
     parser = argparse.ArgumentParser(description="LiteX based Bootloader on ButterStick")
     builder_args(parser)
     trellis_args(parser)
-    # parser.add_argument("--device", default="25F",
-    #                     help="ECP5 device (default=25F)")
-    # parser.add_argument("--sdram-device", default="MT41K64M16",
-    #                     help="ECP5 device (default=MT41K64M16)")
     parser.add_argument(
         "--update-firmware", default=False, action='store_true',
         help="compile firmware and update existing gateware"
