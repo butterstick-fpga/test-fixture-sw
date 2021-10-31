@@ -34,6 +34,26 @@ import socket
 
 import fcntl
 
+
+
+OFLAGS = None
+
+def set_nonblocking(file_handle):
+    """Make a file_handle non-blocking."""
+    global OFLAGS
+    OFLAGS = fcntl.fcntl(file_handle, fcntl.F_GETFL)
+    nflags = OFLAGS | os.O_NONBLOCK
+    fcntl.fcntl(file_handle, fcntl.F_SETFL, nflags)
+
+def set_blocking(file_handle):
+    """Make a file_handle blocking."""
+    global OFLAGS
+    OFLAGS = fcntl.fcntl(file_handle, fcntl.F_GETFL)
+    nflags = OFLAGS | os.O_NONBLOCK
+    fcntl.fcntl(file_handle, fcntl.F_SETFL, nflags)
+
+
+
 import termios
 import pty
 class Console:
@@ -47,9 +67,11 @@ class Console:
         settings[6][termios.VMIN] = 1
         settings[6][termios.VTIME] = 0
         termios.tcsetattr(self.fd, termios.TCSANOW, settings)
+        set_nonblocking(self.fd)
 
     def unconfigure(self):
         termios.tcsetattr(self.fd, termios.TCSAFLUSH, self.default_settings)
+        set_blocking(self.fd)
 
     def getkey(self):
         return os.read(self.fd, 1)
@@ -61,6 +83,8 @@ class Console:
         return None
 
 from time import sleep, localtime, strftime
+
+
 
 
 BRIGHTGREEN = '\033[92;1m'
@@ -110,20 +134,20 @@ def log(logtype, message, result=None):
         output_log.append(f'INFO: {message}')
         print(f'INFO: {message}')
     elif logtype == "test":
-        s = f'TEST: {message:30s}{result}'
+        s = f'TEST: {message:40s}{result}'
         output_log.append(s)
 
         if result == "OK":
             print(BRIGHTGREEN + s + ENDC)
         if result == "FAIL":
             print(BRIGHTRED + s + ENDC)
-            #finish("FAIL") # Exit early 
+            #finish("FAIL") # Exit early
     elif logtype == "debug":
         ...
         serial_log.append(message)
         #print(message)
 
-   
+
 def load_bitstream():
     # Load test-bitstream over JTAG
     print("-- Loading test bitstream into SRAM..")
@@ -133,7 +157,7 @@ def load_bitstream():
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     #(cmd_stdout, cmd_stderr) = cmd.communicate()
     cmd_stdout = b''
-    for line in cmd.stdout: 
+    for line in cmd.stdout:
         line = bytes(line, 'ascii')
         cmd_stdout += line
         #print(line.decode(), end='')
@@ -169,10 +193,10 @@ load_bitstream()
 def test_vccio(voltage, actual):
     for i,read_voltage in enumerate(actual):
         if abs(voltage - read_voltage) < (read_voltage * 0.05):
-            log("test", f"vccio{i}: {read_voltage:0.2f} ({100 * ((read_voltage - voltage) / read_voltage):0.01f}%)", "OK")
+            log("test", f"voltage-vccio{i}: {read_voltage:0.2f} ({100 * ((read_voltage - voltage) / read_voltage):0.01f}%)", "OK")
         else:
-            log("test", f"vccio{i} {voltage}V != {read_voltage:0.2f}", "FAIL")
-        
+            log("test", f"voltage-vccio{i} {voltage}V != {read_voltage:0.2f}", "FAIL")
+
 
 class LiteXTerm:
     prompt = b"testrom-cmd>"
@@ -226,10 +250,10 @@ class LiteXTerm:
             test_idx = 0
             while self.reader_alive:
                 c = self.port.read()
-                #sys.stdout.buffer.write(c)
+                sys.stdout.buffer.write(c)
                 sys.stdout.flush()
                 if self.detect_magic(c):
-                    test_idx += 1 
+                    test_idx += 1
                     vccio_voltages = [jtb.voltages[3],jtb.voltages[1],jtb.voltages[4]]
                     if test_idx == 1:
                         self.port.write(b'vccio 59500\n')
@@ -248,7 +272,17 @@ class LiteXTerm:
 
                     if test_idx == 5:
                         test_vccio(3.3, vccio_voltages)
-                
+                        self.port.write(b'\n\n')
+                    
+                    if test_idx == 6:
+                        #jtb.close()
+                        self.port.write(b'\n\n')
+
+                        self.stop_writer()
+                        self.reader_alive = False
+            
+
+
 
         except serial.SerialException:
             self.reader_alive = False
@@ -268,7 +302,11 @@ class LiteXTerm:
     def writer(self):
         try:
             while self.writer_alive:
-                b = self.console.getkey()
+                try:
+                    b = self.console.getkey()
+                except BlockingIOError:
+                    continue
+
                 if b == b"\x03":
                     self.stop()
                 elif b == b"\n":
@@ -279,6 +317,7 @@ class LiteXTerm:
                     self.port.write(ansi_seq)
                 else:
                     self.port.write(b)
+        
         except:
             self.writer_alive = False
             self.console.unconfigure()
@@ -308,17 +347,8 @@ class LiteXTerm:
             self.reader_thread.join()
 
 
-OFLAGS = None
-
-def set_nonblocking(file_handle):
-    """Make a file_handle non-blocking."""
-    global OFLAGS
-    OFLAGS = fcntl.fcntl(file_handle, fcntl.F_GETFL)
-    nflags = OFLAGS | os.O_NONBLOCK
-    fcntl.fcntl(file_handle, fcntl.F_SETFL, nflags)
-
 class JTAGTestBed:
-    
+
     spi_clk = 0x02
     spi_cipo = 0x04
     spi_copi = 0x08
@@ -333,7 +363,7 @@ class JTAGTestBed:
 
         self.jtag_pty_running = True
         self.voltages = [0.0] * 8
-    
+
     def open(self):
         self.file, self.name = pty.openpty()
 
@@ -360,7 +390,7 @@ class JTAGTestBed:
                 pass
 
             for n in range(120):
-                val = 0x001 
+                val = 0x001
                 if send:
                     val |= 0x200 | (ord(r) << 1)
                 seq.append(BitSequence(val, msb=False, length=10))
@@ -369,7 +399,7 @@ class JTAGTestBed:
             self.j.change_state('pause_dr')
             self.j.change_state('shift_dr')
             seq = self.j.shift_register(seq)
-            
+
             for n in range(120):
                 v = seq[10*n:10*(n+1)]
                 v.reverse()
@@ -386,14 +416,14 @@ class JTAGTestBed:
             for i in range(8):
                 self.voltages[i] = self.read_adc(i)
 
-    
+
 
 
     def write_gpio(self, data: int) -> bytes:
         high_data = (data) & 0xFF
         high_dir = (0x1A) & 0xFF
         return bytes([self.j.controller.ftdi.SET_BITS_HIGH, high_data, high_dir])
-                    
+
 
     def read_gpio(self) -> bytes:
         return bytes([self.j.controller.ftdi.GET_BITS_HIGH])
@@ -414,8 +444,8 @@ class JTAGTestBed:
 
     def read_adc(self, channel) -> float:
         f = self.j.controller.ftdi
-        
-        
+
+
         cmd = bytes()
         cmd += self.write_gpio(0)
         cmd += self.xfer_byte(0x01)
@@ -425,8 +455,8 @@ class JTAGTestBed:
         cmd += self.write_gpio(self.spi_cs)
 
         cmd += bytes([f.SEND_IMMEDIATE])
-        
-  
+
+
         f.write_data(cmd)
         data = f.read_data_bytes(24, 4)
 
@@ -451,11 +481,13 @@ port = os.ttyname(jtb.name)
 term.open(port, 1000000)
 term.console.configure()
 term.start()
-term.join(True)
+#
 
 
 
 
+
+sleep(0.2)
 
 voltage_rails = [
     (0, "eth_core", 1.2),
@@ -468,18 +500,19 @@ voltage_rails = [
     (7, "fpga_aux", 2.5)
 ]
 
-while(True):
-    for number, name, voltage in voltage_rails:
-        #jtb.read_adc(number)
-        #print(jtb.voltages)
+for number, name, voltage in voltage_rails:
+    read_voltage = jtb.voltages[number]
 
-        # if abs(voltage - read_voltage) < (read_voltage * 0.05):
-        #     log("test", f"{name:10s}: {read_voltage:0.2f} ({100 * ((voltage - read_voltage) / read_voltage):0.01f}%)", "OK")
-        # else:
-        #     log("test", f"{name:10s} {voltage} != {read_voltage:0.2f}", "FAIL")
-        
-        sleep(0.05)
+    if abs(voltage - read_voltage) < (read_voltage * 0.05):
+        log("test", f"voltage-{name:10s}: {read_voltage:0.2f} ({100 * ((read_voltage - voltage) / read_voltage):0.01f}%)", "OK")
+    else:
+        log("test", f"voltage-{name:10s} {voltage} != {read_voltage:0.2f}", "FAIL")
 
 
+
+term.join(True)
+term.console.unconfigure()
+
+jtb.close()
 
 finish("PASS")
