@@ -105,6 +105,7 @@ class _CRG(Module):
 class BaseSoC(SoCCore):
     mem_map = {
         "rom":      0x00000000,  # (default shadow @0x80000000)
+        "testrom":  0x08000000,  # (default shadow @0x80000000)
         "sram":     0x10000000,  # (default shadow @0xa0000000)
         "spiflash": 0x20000000,  # (default shadow @0xa0000000)
         "main_ram": 0x40000000,  # (default shadow @0xc0000000)
@@ -148,13 +149,15 @@ class BaseSoC(SoCCore):
         led = platform.request("led_rgb_multiplex")
         self.submodules.leds = Leds(led.a, led.c)
         self.add_csr("leds")
-
-        # from litex.soc.cores.led import LedChaser
-        # led = platform.request("led_rgb_multiplex")
-        # self.comb += led.c.eq(0b010) # Blue.
-        # self.submodules.leds = LedChaser(
-        #     pads         = led.a,
-        #     sys_clk_freq = sys_clk_freq)
+        
+        # Test rom ---------------------------------------------------------------------------------
+        self.add_rom("testrom",
+                origin   = self.mem_map['testrom'],
+                size     = 32*1024,
+                contents = [],
+                mode     = 'r',
+            )
+        self.add_constant("ROM_BOOT_ADDRESS", self.mem_map['testrom'])
 
 
         self.submodules.ddrphy = ECP5DDRPHY(
@@ -190,24 +193,44 @@ class BaseSoC(SoCCore):
         (git_stdout, _) = git_rev_cmd.communicate()
         self.add_constant('CONFIG_REPO_GIT_DESC',git_stdout.decode('ascii').strip('\n'))
 
+    def PackageTestRom(self, builder):
+        self.finalize()
+
+        os.makedirs(builder.output_dir, exist_ok=True)
+
+        # Remove un-needed sw packages
+        builder.add_software_package("testrom", "{}/../firmware/testrom".format(os.getcwd()))
+
+        builder._prepare_rom_software()
+        builder._generate_includes()
+        builder._generate_rom_software(compile_bios=False)
+
+        # patch random file into BRAM
+        rom_file = os.path.join(builder.software_dir, "testrom", "demo.bin")
+        rom_data = soc_core.get_mem_data(rom_file, self.cpu.endianness)
+
+        # Initialize SoC with with demo data.
+        self.testrom.mem.init = rom_data
+
+def CreateFirmwareInit(init, output_file):
+    content = ""
+    for d in init:
+        content += "{:08x}\n".format(d)
+    with open(output_file, "w") as o:
+        o.write(content)
+
+
+
 
 # Build --------------------------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="LiteX based Bootloader on ButterStick")
-    builder_args(parser)
-    trellis_args(parser)
-    parser.add_argument(
-        "--update-firmware", default=False, action='store_true',
-        help="compile firmware and update existing gateware"
-    )
-    args = parser.parse_args()
+    soc = BaseSoC()
+    builder = Builder(soc)
 
-    soc = BaseSoC(**argdict(args))
-    builder = Builder(soc, **builder_argdict(args))
+    soc.PackageTestRom(builder)
     
-    # Build gateware
-    builder_kargs = trellis_argdict(args)
-    vns = builder.build(**builder_kargs)
+    # Build software
+    vns = builder.build()
     soc.do_exit(vns)   
     
     from litex.soc.doc import generate_docs
@@ -220,14 +243,6 @@ def main():
     # create compressed config (ECP5 specific)
     output_bitstream = os.path.join(builder.gateware_dir, f"{soc.platform.name}.bit")
     os.system(f"ecppack --freq 38.8 --compress --input {input_config} --bit {output_bitstream}")
-
-def argdict(args):
-    r = soc_core_argdict(args)
-    for a in ["device", "revision", "sdram_device"]:
-        arg = getattr(args, a, None)
-        if arg is not None:
-            r[a] = arg
-    return r
 
 if __name__ == "__main__":
     main()
