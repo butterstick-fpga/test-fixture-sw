@@ -70,7 +70,7 @@ static char *get_token(char **str)
 
 static void prompt(void)
 {
-	printf("\e[92;1mlitex-demo-app\e[0m> ");
+	printf("testrom-cmd> ");
 }
 
 /*-----------------------------------------------------------------------*/
@@ -150,6 +150,18 @@ static void helloc_cmd(void)
 	helloc();
 }
 
+static void vccio_cmd(char* c)
+{
+	int v = 0;
+	sscanf(c, "%u", &v);
+
+	vccio_enable_write(1);
+	vccio_ch0_write(v);
+	vccio_ch1_write(v);
+	vccio_ch2_write(v);
+	busy_wait(100);
+}
+
 #ifdef WITH_CXX
 extern void hellocpp(void);
 
@@ -188,6 +200,8 @@ static void console_service(void)
 	else if(strcmp(token, "hellocpp") == 0)
 		hellocpp_cmd();
 #endif
+	else if(strcmp(token, "vccio") == 0)
+		vccio_cmd(get_token(&str));
 	prompt();
 }
 

@@ -70,6 +70,7 @@ ENDC = '\033[0m'
 serial_log = []
 output_log = []
 
+
 # https://stackoverflow.com/questions/4417546/constantly-print-subprocess-output-while-process-is-running
 def execute(command):
     subprocess.check_call(command, stdout=sys.stdout, stderr=sys.stdout)
@@ -165,10 +166,22 @@ def load_bitstream():
 load_bitstream()
 
 
+def test_vccio(voltage, actual):
+    for i,read_voltage in enumerate(actual):
+        if abs(voltage - read_voltage) < (read_voltage * 0.05):
+            log("test", f"vccio{i}: {read_voltage:0.2f} ({100 * ((read_voltage - voltage) / read_voltage):0.01f}%)", "OK")
+        else:
+            log("test", f"vccio{i} {voltage}V != {read_voltage:0.2f}", "FAIL")
+        
+
 class LiteXTerm:
-    def __init__(self):
+    prompt = b"testrom-cmd>"
+    def __init__(self, jtb):
         self.reader_alive = False
         self.writer_alive = False
+
+        self.jtb = jtb
+        self.detect_buffer = bytes(len(self.prompt))
 
         self.console = Console()
 
@@ -194,17 +207,48 @@ class LiteXTerm:
         # Exit term if 2 CTRL-C pressed in less than 0.5s.
         if (sigint_time_current - self.sigint_time_last < 0.5):
             self.console.unconfigure()
+            jtb.close()
             self.close()
             sys.exit()
         else:
             self.sigint_time_last = sigint_time_current
 
+    def detect_magic(self, data):
+        if len(data):
+            self.detect_buffer = self.detect_buffer[1:] + data
+            return self.detect_buffer[:len(self.prompt)] == self.prompt
+        else:
+            return False
+
+
     def reader(self):
         try:
+            test_idx = 0
             while self.reader_alive:
                 c = self.port.read()
-                sys.stdout.buffer.write(c)
+                #sys.stdout.buffer.write(c)
                 sys.stdout.flush()
+                if self.detect_magic(c):
+                    test_idx += 1 
+                    vccio_voltages = [jtb.voltages[3],jtb.voltages[1],jtb.voltages[4]]
+                    if test_idx == 1:
+                        self.port.write(b'vccio 59500\n')
+
+                    if test_idx == 2:
+                        test_vccio(1.20, vccio_voltages)
+                        self.port.write(b'vccio 45000\n')
+
+                    if test_idx == 3:
+                        test_vccio(1.8, vccio_voltages)
+                        self.port.write(b'vccio 26500\n')
+
+                    if test_idx == 4:
+                        test_vccio(2.5, vccio_voltages)
+                        self.port.write(b'vccio 6500\n')
+
+                    if test_idx == 5:
+                        test_vccio(3.3, vccio_voltages)
+                
 
         except serial.SerialException:
             self.reader_alive = False
@@ -287,6 +331,7 @@ class JTAGTestBed:
         self.j.reset()
         self.j.write_ir(BitSequence(0x32, msb=False, length=8))
 
+        self.jtag_pty_running = True
         self.voltages = [0.0] * 8
     
     def open(self):
@@ -296,19 +341,14 @@ class JTAGTestBed:
 
         self.jtag_pty_thread = threading.Thread(target=self.jtag_pty)
         self.jtag_pty_thread.start()
-        
-       
 
     def close(self):
-        self.jtag_pty_thread.terminate()
+        self.jtag_pty_running = False
+        self.jtag_pty_thread.join()
         self.j.close()
 
-
     def jtag_pty(self):
-        i = 0
-        while True:
-        
-            # shift out 2000 bits (this seems to work well with the buffers)
+        while self.jtag_pty_running:
             seq = BitSequence()
 
             send = False
@@ -319,7 +359,7 @@ class JTAGTestBed:
             except BlockingIOError:
                 pass
 
-            for n in range(200):
+            for n in range(120):
                 val = 0x001 
                 if send:
                     val |= 0x200 | (ord(r) << 1)
@@ -329,11 +369,8 @@ class JTAGTestBed:
             self.j.change_state('pause_dr')
             self.j.change_state('shift_dr')
             seq = self.j.shift_register(seq)
-            #self.j.sync()
             
-            
-            
-            for n in range(200):
+            for n in range(120):
                 v = seq[10*n:10*(n+1)]
                 v.reverse()
                 if v[0]:
@@ -346,9 +383,8 @@ class JTAGTestBed:
                         pass
 
             # Voltage readings
-            self.voltages[i] = self.read_adc(i)
-            #print(self.voltages)
-            i = (i + 1) % 8
+            for i in range(8):
+                self.voltages[i] = self.read_adc(i)
 
     
 
@@ -403,19 +439,19 @@ class JTAGTestBed:
         return value * (3.33 / 1024.0)
 
 
-term = LiteXTerm()
+jtb = JTAGTestBed()
+term = LiteXTerm(jtb)
 
 sleep(0.2)
 
-jtb = JTAGTestBed()
 jtb.open()
+
 port = os.ttyname(jtb.name)
 
 term.open(port, 1000000)
 term.console.configure()
 term.start()
-#term.join(True)
-
+term.join(True)
 
 
 

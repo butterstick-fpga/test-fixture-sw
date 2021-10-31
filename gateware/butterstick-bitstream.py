@@ -159,6 +159,8 @@ class BaseSoC(SoCCore):
             )
         self.add_constant("ROM_BOOT_ADDRESS", self.mem_map['testrom'])
 
+        self.add_constant("UART_POLLING")
+
 
         self.submodules.ddrphy = ECP5DDRPHY(
             platform.request("ddram"),
