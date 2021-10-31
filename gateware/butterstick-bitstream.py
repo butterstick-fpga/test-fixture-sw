@@ -224,25 +224,53 @@ def CreateFirmwareInit(init, output_file):
 
 # Build --------------------------------------------------------------------------------------------
 def main():
+    parser = argparse.ArgumentParser(description="Build ButterStick test gateware")
+    parser.add_argument("--update-firmware",
+                        default=False,
+                        action='store_true',
+                        help="compile firmware and update existing gateware")
+    args = parser.parse_args()
+
     soc = BaseSoC()
     builder = Builder(soc)
 
-    soc.PackageTestRom(builder)
-    
-    # Build software
-    vns = builder.build()
-    soc.do_exit(vns)   
-    
-    from litex.soc.doc import generate_docs
-    generate_docs(soc, "build/docs/")
-    os.system("sphinx-build -M html build/docs/ build/docs/_build")
+    rand_rom = os.path.join(builder.gateware_dir, "rand.data")
 
-    input_config = os.path.join(builder.output_dir, "gateware", f"{soc.platform.name}.config")
-  
+    input_config = os.path.join(builder.gateware_dir, f"{soc.platform.name}.config")
+    output_config = os.path.join(builder.gateware_dir, f"{soc.platform.name}_patched.config")
+    
+    # Create rand fill for BRAM
+    if (os.path.exists(rand_rom) == False) or (args.update_firmware == False):
+        os.makedirs(os.path.join(builder.output_dir, 'software'), exist_ok=True)
+        os.makedirs(os.path.join(builder.output_dir, 'gateware'), exist_ok=True)
+        os.system(f"ecpbram  --generate {rand_rom} --seed {0} --width {32} --depth {32*1024 // 4}")
+
+        # patch random file into BRAM
+        data = []
+        with open(rand_rom, 'r') as inp:
+            for d in inp.readlines():
+                data += [int(d, 16)]
+        soc.testrom.mem.init = data
+
+        # Build gateware
+        vns = builder.build()
+        soc.do_exit(vns)
+    
+    soc.finalize()
+    soc.PackageTestRom(builder)
+
+
+    testrom_file = "{}/testrom/demo.bin".format(builder.software_dir)
+    testrom_init = "{}/testrom/testrom.init".format(builder.software_dir)
+    CreateFirmwareInit(get_mem_data(testrom_file, soc.cpu.endianness), testrom_init)
+
+    # Insert Firmware into Gateware
+    os.system(f"ecpbram  --input {input_config} --output {output_config} --from {rand_rom} --to {testrom_init}")
+
 
     # create compressed config (ECP5 specific)
     output_bitstream = os.path.join(builder.gateware_dir, f"{soc.platform.name}.bit")
-    os.system(f"ecppack --freq 38.8 --compress --input {input_config} --bit {output_bitstream}")
+    os.system(f"ecppack --freq 38.8 --compress --input {output_config} --bit {output_bitstream}")
 
 if __name__ == "__main__":
     main()
