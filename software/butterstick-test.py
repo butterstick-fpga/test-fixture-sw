@@ -173,6 +173,12 @@ check_str = [
     (b'Memtest OK', 'Memtest OK', 'OK'),
     (b'Memspeed at 0x20000000', 'FLASH Test', 'OK'),
     (b'LiteX minimal demo app', 'RISCV app loaded', 'OK'),
+    (b'I/O PORT A passed', 'I/O PORT A', 'OK'),
+    (b'I/O PORT A failed', 'I/O PORT A', 'FAIL'),
+    (b'I/O PORT B passed', 'I/O PORT B', 'OK'),
+    (b'I/O PORT B failed', 'I/O PORT B', 'FAIL'),
+    (b'I/O PORT C passed', 'I/O PORT C', 'OK'),
+    (b'I/O PORT C failed', 'I/O PORT C', 'FAIL'),
 ]
 
 class LiteXTerm:
@@ -231,8 +237,8 @@ class LiteXTerm:
             while self.reader_alive:
                 c = self.port.read()
                 
-                # sys.stdout.buffer.write(c)
-                # sys.stdout.flush()
+                sys.stdout.buffer.write(c)
+                sys.stdout.flush()
 
                 log_bytes += c
                 for val in check_str:
@@ -275,9 +281,14 @@ class LiteXTerm:
                         elif b'phy_mdio_read(3)=' in log_bytes:
                             log('test', 'PHY_ID1', 'FAIL')   
 
-                        self.port.write(b'\n\n')
+                        self.port.write(b'io_test\n')
                     
                     if test_idx == 7:
+                        
+                        #jtb.close()
+                        self.port.write(b'led\n\n')
+                    
+                    if test_idx == 8:
                         
                         #jtb.close()
                         self.port.write(b'\n\n')
@@ -285,7 +296,6 @@ class LiteXTerm:
                         self.stop_writer()
                         self.reader_alive = False
 
-                        finish('PASS')
                         self.passed = True
             
 
@@ -545,9 +555,14 @@ term.join()
 jtb.close()
 term.console.unconfigure()
 
-if term.passed:
-    # check device type
-    execute(["ecpprog", "../prebuilt/butterstick_bootloader.bit"])
-
-
+try:
+    if term.passed:
+        # check device type
+        execute(["ecpprog", "../prebuilt/butterstick_bootloader.bit"])
+        finish('PASS')
+        sys.exit(0)
+        
+except subprocess.CalledProcessError:
+    finish('FAIL')
+finish('FAIL')
 sys.exit(0)

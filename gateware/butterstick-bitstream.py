@@ -34,7 +34,7 @@ from litex.soc.interconnect.csr import *
 
 from litex.soc.cores.clock import *
 from litex.soc.cores.clock.common import period_ns
-from litex.soc.cores.gpio import GPIOOut, GPIOIn
+from litex.soc.cores.gpio import GPIOOut, GPIOIn, GPIOTristate
 from litex.soc.cores.spi_flash import SpiFlashDualQuad
 
 
@@ -160,6 +160,10 @@ class BaseSoC(SoCCore):
         self.add_constant("ROM_BOOT_ADDRESS", self.mem_map['testrom'])
 
         self.add_constant("UART_POLLING")
+
+        self.submodules.gpioa = GPIOTristate(platform.request('gpio',0))
+        self.submodules.gpiob = GPIOTristate(platform.request('gpio',1))
+        self.submodules.gpioc = GPIOTristate(platform.request('gpio',2))
 
 
         self.submodules.ddrphy = ECP5DDRPHY(

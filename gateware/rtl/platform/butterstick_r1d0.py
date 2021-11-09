@@ -49,6 +49,10 @@ _butterstick_r1d0_io = [
     ),
 
 
+    ("gpio", 0, Pins("G2 J3 F1 K3 J4 K2 J5 J1 N2 L3 M1 L2 N3 N4 M3 P5 H1 K5 K4 K1 L4 L1 L5 M4 N1 N5 P3 P4 H2 P1 G1 P2"), IOStandard("LVCMOS33"), Misc("PULLMODE=UP")),
+    ("gpio", 1, Pins("E4 A4 D5 A5 C4 B2 B4 C2 A2 C1 B1 D1 F4 D2 E3 E1 B5 E5 F5 C5 B3 A3 D3 C3 H5 G5 H3 H4 G3 F2 F3 E2"), IOStandard("LVCMOS33"), Misc("PULLMODE=UP")),
+    ("gpio", 2, Pins("C11 B11 D6 D7 E6 E7 D8 E8 E10 D10 A9 A10 B10 A11"), IOStandard("LVCMOS33"), Misc("PULLMODE=UP")),
+
     ("ddram", 0,
         Subsignal("a", Pins(
             "G16 E19 E20 F16 F19 E16 F17 L20 "
