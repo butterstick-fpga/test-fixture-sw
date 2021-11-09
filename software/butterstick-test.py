@@ -94,39 +94,9 @@ ENDC = '\033[0m'
 serial_log = []
 output_log = []
 
-
 # https://stackoverflow.com/questions/4417546/constantly-print-subprocess-output-while-process-is-running
 def execute(command):
     subprocess.check_call(command, stdout=sys.stdout, stderr=sys.stdout)
-
-def finish(result):
-    if result == "PASS":
-        print(BRIGHTGREEN + """
-  ############################
-  #          PASS            #
-  ############################""" + ENDC)
-    if result == "FAIL":
-        print(BRIGHTRED + """
-  ############################
-  #          FAIL            #
-  ############################""" + ENDC)
-
-    # Flush log out to file
-    os.makedirs('log', exist_ok=True)
-
-    t = localtime()
-    current_time = strftime("%Y-%m-%d-%H:%M:%S", t)
-
-    f= open(f"log/{result}-{current_time}.txt","w+")
-    for l in output_log:
-        f.write(l + '\n')
-    f.write("\r\n-=-=-=-=-= RAW serial log -=-=-=-=-=-=\r\n")
-    for l in serial_log:
-        f.write(l + '\n')
-    f.close()
-
-    sys.exit(0)
-
 
 def log(logtype, message, result=None):
     if logtype == "info":
@@ -141,7 +111,7 @@ def log(logtype, message, result=None):
             print(BRIGHTGREEN + s + ENDC)
         if result == "FAIL":
             print(BRIGHTRED + s + ENDC)
-            #finish("FAIL") # Exit early
+            finish("FAIL") # Exit early
     elif logtype == "debug":
         ...
         serial_log.append(message)
@@ -202,7 +172,7 @@ check_str = [
     (b'BIOS CRC passed', 'BIOS CRC PASS', 'OK'),
     (b'Memtest OK', 'Memtest OK', 'OK'),
     (b'Memspeed at 0x20000000', 'FLASH Test', 'OK'),
-    (b'LiteX minimal demo app', 'RISCV app loaded', 'OK')
+    (b'LiteX minimal demo app', 'RISCV app loaded', 'OK'),
 ]
 
 class LiteXTerm:
@@ -267,13 +237,14 @@ class LiteXTerm:
                     str,msg,result = val
                     if str in log_bytes:
                         check_str.remove(val)
+                        log_bytes = bytes()
                         log("test", msg, result)
 
                 if self.detect_magic(c):
                     test_idx += 1
                     vccio_voltages = [jtb.voltages[3],jtb.voltages[1],jtb.voltages[4]]
                     if test_idx == 1:
-                        self.port.write(b'vccio 59500\n')
+                        self.port.write(b'vccio 59700\n')
 
                     if test_idx == 2:
                         test_vccio(1.20, vccio_voltages)
@@ -289,14 +260,30 @@ class LiteXTerm:
 
                     if test_idx == 5:
                         test_vccio(3.3, vccio_voltages)
-                        self.port.write(b'\n\n')
+                        self.port.write(b'eth_phy\n')
                     
                     if test_idx == 6:
+                        if b'phy_mdio_read(2)=0022' in log_bytes:
+                            log('test', 'PHY_ID0', 'OK')
+                        elif b'phy_mdio_read(2)=' in log_bytes:
+                            log('test', 'PHY_ID0', 'FAIL')    
+                        
+                        if b'phy_mdio_read(3)=1622' in log_bytes:
+                            log('test', 'PHY_ID1', 'OK')
+                        elif b'phy_mdio_read(3)=' in log_bytes:
+                            log('test', 'PHY_ID1', 'FAIL')   
+
+                        self.port.write(b'\n\n')
+                    
+                    if test_idx == 7:
+                        
                         #jtb.close()
                         self.port.write(b'\n\n')
 
                         self.stop_writer()
                         self.reader_alive = False
+
+                        finish('PASS')
             
 
 
@@ -501,6 +488,29 @@ term.start()
 #
 
 
+def finish(result):
+    if result == "PASS":
+        print(BRIGHTGREEN + """
+  ############################
+  #          PASS            #
+  ############################""" + ENDC)
+    if result == "FAIL":
+        print(BRIGHTRED + """
+  ############################
+  #          FAIL            #
+  ############################""" + ENDC)
+
+    term.stop()
+    
+    term.join(True)
+    term.console.unconfigure()
+    
+    term.close()
+    jtb.close()
+
+
+    sys.exit(0)
+
 
 
 
@@ -527,9 +537,5 @@ for number, name, voltage in voltage_rails:
 
 
 
-term.join(True)
-term.console.unconfigure()
-
-jtb.close()
-
-finish("PASS")
+term.join()
+sys.exit(0)

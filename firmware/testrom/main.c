@@ -8,6 +8,7 @@
 #include <irq.h>
 #include <libbase/uart.h>
 #include <libbase/console.h>
+#include <libliteeth/mdio.h>
 #include <generated/csr.h>
 
 /*-----------------------------------------------------------------------*/
@@ -159,6 +160,15 @@ static void vccio_cmd(char* c)
 	vccio_ch0_write(v);
 	vccio_ch1_write(v);
 	vccio_ch2_write(v);
+	busy_wait(150);
+}
+
+
+static void eth_phy_check(void)
+{
+
+printf("phy_mdio_read(%u)=%04x\n", 2, mdio_read(3, 2));
+printf("phy_mdio_read(%u)=%04x\n", 3, mdio_read(3, 3));
 	busy_wait(100);
 }
 
@@ -202,6 +212,8 @@ static void console_service(void)
 #endif
 	else if(strcmp(token, "vccio") == 0)
 		vccio_cmd(get_token(&str));
+	else if(strcmp(token, "eth_phy") == 0)
+		eth_phy_check();
 	prompt();
 }
 
