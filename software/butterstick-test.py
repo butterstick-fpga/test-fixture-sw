@@ -193,10 +193,17 @@ load_bitstream()
 def test_vccio(voltage, actual):
     for i,read_voltage in enumerate(actual):
         if abs(voltage - read_voltage) < (read_voltage * 0.05):
-            log("test", f"voltage-vccio{i}: {read_voltage:0.2f} ({100 * ((read_voltage - voltage) / read_voltage):0.01f}%)", "OK")
+            log("test", f"voltage-vccio{i}-{voltage} : {read_voltage:0.2f} ({100 * ((read_voltage - voltage) / read_voltage):0.01f}%)", "OK")
         else:
             log("test", f"voltage-vccio{i} {voltage}V != {read_voltage:0.2f}", "FAIL")
 
+
+check_str = [
+    (b'BIOS CRC passed', 'BIOS CRC PASS', 'OK'),
+    (b'Memtest OK', 'Memtest OK', 'OK'),
+    (b'Memspeed at 0x20000000', 'FLASH Test', 'OK'),
+    (b'LiteX minimal demo app', 'RISCV app loaded', 'OK')
+]
 
 class LiteXTerm:
     prompt = b"testrom-cmd>"
@@ -248,10 +255,20 @@ class LiteXTerm:
     def reader(self):
         try:
             test_idx = 0
+            log_bytes = bytes([])
             while self.reader_alive:
                 c = self.port.read()
-                sys.stdout.buffer.write(c)
-                sys.stdout.flush()
+                
+                # sys.stdout.buffer.write(c)
+                # sys.stdout.flush()
+
+                log_bytes += c
+                for val in check_str:
+                    str,msg,result = val
+                    if str in log_bytes:
+                        check_str.remove(val)
+                        log("test", msg, result)
+
                 if self.detect_magic(c):
                     test_idx += 1
                     vccio_voltages = [jtb.voltages[3],jtb.voltages[1],jtb.voltages[4]]
