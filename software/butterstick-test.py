@@ -237,8 +237,8 @@ class LiteXTerm:
             while self.reader_alive:
                 c = self.port.read()
                 
-                sys.stdout.buffer.write(c)
-                sys.stdout.flush()
+                # sys.stdout.buffer.write(c)
+                # sys.stdout.flush()
 
                 log_bytes += c
                 for val in check_str:
@@ -561,7 +561,7 @@ try:
         execute(["ecpprog", "../prebuilt/butterstick_bootloader.bit"])
         finish('PASS')
         sys.exit(0)
-        
+
 except subprocess.CalledProcessError:
     finish('FAIL')
 finish('FAIL')
