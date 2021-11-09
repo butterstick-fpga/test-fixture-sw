@@ -181,6 +181,8 @@ class LiteXTerm:
         self.reader_alive = False
         self.writer_alive = False
 
+        self.passed = False
+
         self.jtb = jtb
         self.detect_buffer = bytes(len(self.prompt))
 
@@ -284,6 +286,7 @@ class LiteXTerm:
                         self.reader_alive = False
 
                         finish('PASS')
+                        self.passed = True
             
 
 
@@ -494,6 +497,7 @@ def finish(result):
   ############################
   #          PASS            #
   ############################""" + ENDC)
+        return
     if result == "FAIL":
         print(BRIGHTRED + """
   ############################
@@ -538,4 +542,12 @@ for number, name, voltage in voltage_rails:
 
 
 term.join()
+jtb.close()
+term.console.unconfigure()
+
+if term.passed:
+    # check device type
+    execute(["ecpprog", "../prebuilt/butterstick_bootloader.bit"])
+
+
 sys.exit(0)
