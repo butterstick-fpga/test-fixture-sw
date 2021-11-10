@@ -27,10 +27,15 @@ $ cd software
 $ python3 run-test.py
 ```
 5. Load a ButterStick board into the test-jig, no extra cables should be attached to the ButterStick, only the test-jig.
-6. Press `space` as instructed by the script, the tests will run.
+6. Press `space` as instructed by the script, the tests will run. Towards the end of the test the LEDs will run through each colour.
 7. If the test result in PASS then unload the butterStick and set it aside for Phase 2. Repeat.
 
 ### Phase 2
+
+0. Prep: Copy udev rule
+```
+sudo cp extra/butterstick-dfu.rules /dev/udev/rules.d/
+```
 
 1. Run `run-dfu.py`
 ```
