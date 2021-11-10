@@ -72,7 +72,7 @@ while True:
 
     if c == ' ':
         try:
-            execute(["dfu-util", "--alt", "0", "--download", "../prebuilt/example.dfu", "--reset"])
+            execute(["dfu-util", "--device", "1209:5af1", "--alt", "0", "--download", "../prebuilt/example.dfu", "--reset"])
         except:
             ...
     else:
