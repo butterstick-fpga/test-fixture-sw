@@ -146,7 +146,7 @@ def load_bitstream():
 
     print(f"JTAG:{ecp_device[0]} Detected")
 
-    test_bitstream = '../gateware/build/butterstick_r1d0/gateware/butterstick_r1d0.bit'
+    test_bitstream = '..prebuilt/butterstick_r1d0_bootloader.dfu'
 
     cmd = subprocess.Popen(["ecpprog", "-S", test_bitstream],
                             stdout=subprocess.PIPE,
@@ -237,8 +237,8 @@ class LiteXTerm:
             while self.reader_alive:
                 c = self.port.read()
                 
-                # sys.stdout.buffer.write(c)
-                # sys.stdout.flush()
+                sys.stdout.buffer.write(c)
+                sys.stdout.flush()
 
                 log_bytes += c
                 for val in check_str:
