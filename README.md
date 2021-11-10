@@ -21,10 +21,10 @@ The tests for these boards are done in two phases.
 ```
 python3 -m pip install pyftdi --user
 ```
-4. Enter run `run-test.py`
+4. Run `run-tests.py`
 ```
 $ cd software
-$ python3 run-test.py
+$ python3 run-tests.py
 ```
 5. Load a ButterStick board into the test-jig, no extra cables should be attached to the ButterStick, only the test-jig.
 6. Press `space` as instructed by the script, the tests will run. Towards the end of the test the LEDs will run through each colour.
@@ -34,7 +34,7 @@ $ python3 run-test.py
 
 0. Prep: Copy udev rule
 ```
-sudo cp extra/10-butterstick-dfu.rules /dev/udev/rules.d/
+sudo cp extra/10-butterstick-dfu.rules /etc/udev/rules.d/
 ```
 
 1. Run `run-dfu.py`
