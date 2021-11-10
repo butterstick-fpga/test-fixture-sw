@@ -237,8 +237,8 @@ class LiteXTerm:
             while self.reader_alive:
                 c = self.port.read()
                 
-                sys.stdout.buffer.write(c)
-                sys.stdout.flush()
+                # sys.stdout.buffer.write(c)
+                # sys.stdout.flush()
 
                 log_bytes += c
                 for val in check_str:
@@ -554,13 +554,18 @@ for number, name, voltage in voltage_rails:
 
 
 term.join()
+
+jtb.j.reset()
+time.sleep(0.2)
+
 jtb.close()
 term.console.unconfigure()
+
+time.sleep(0.2)
 
 try:
     if term.passed:
         # check device type
-        
         execute(["ecpprog", "-p", "../prebuilt/butterstick_r1d0_bootloader.dfu"])
         finish('PASS')
         sys.exit(0)
