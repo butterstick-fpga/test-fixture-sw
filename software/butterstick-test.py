@@ -146,7 +146,7 @@ def load_bitstream():
 
     print(f"JTAG:{ecp_device[0]} Detected")
 
-    test_bitstream = '..prebuilt/butterstick_r1d0_bootloader.dfu'
+    test_bitstream = '../prebuilt/butterstick_r1d0_bootloader.dfu'
 
     cmd = subprocess.Popen(["ecpprog", "-S", test_bitstream],
                             stdout=subprocess.PIPE,
