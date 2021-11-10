@@ -16,7 +16,7 @@ The tests for these boards are done in two phases.
 
 ### Phase 1
 1. Locate a linux computer. These tests have been developed on an Ubuntu based machine.
-2. Plug in the 'butterstick-programmer' board to your computer. The programmer makes use of an FTDI232H, which should appear.
+2. Plug in the 'butterstick-programmer' board to your computer. The programmer makes use of an FTDI232H, which should appear without needing drivers.
 3. Install python dependencies `pyftdi`
 ```
 python3 -m pip install pyftdi --user
@@ -39,4 +39,5 @@ $ python run-dfu.py
 ```
 2. While holding BTN0 on the ButterStick plug it in, the LEDs should indicate that it's running.
 3. Press `space` and watch the example program load over USB.
-4. If this passes successfully then the ButterStick is ready to ship!
+4. Check if this completed correctly, and the ButterStick showing blue moving LEDs
+5. Ship!

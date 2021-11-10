@@ -561,7 +561,7 @@ try:
     if term.passed:
         # check device type
         
-        execute(["ecpprog", "-p", "../prebuilt/butterstick_bootloader.bit"])
+        execute(["ecpprog", "-p", "../prebuilt/butterstick_r1d0_bootloader.dfu"])
         finish('PASS')
         sys.exit(0)
 
