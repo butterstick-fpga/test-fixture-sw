@@ -551,6 +551,8 @@ for number, name, voltage in voltage_rails:
 
 
 
+
+
 term.join()
 jtb.close()
 term.console.unconfigure()
@@ -558,7 +560,8 @@ term.console.unconfigure()
 try:
     if term.passed:
         # check device type
-        execute(["ecpprog", "../prebuilt/butterstick_bootloader.bit"])
+        
+        execute(["ecpprog", "-p", "../prebuilt/butterstick_bootloader.bit"])
         finish('PASS')
         sys.exit(0)
 
