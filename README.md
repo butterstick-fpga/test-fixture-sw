@@ -34,7 +34,7 @@ $ python3 run-test.py
 
 0. Prep: Copy udev rule
 ```
-sudo cp extra/butterstick-dfu.rules /dev/udev/rules.d/
+sudo cp extra/10-butterstick-dfu.rules /dev/udev/rules.d/
 ```
 
 1. Run `run-dfu.py`
