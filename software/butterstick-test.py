@@ -566,11 +566,11 @@ time.sleep(0.2)
 try:
     if term.passed:
         # check device type
+        execute(["ecpprog", "-t"])
         execute(["ecpprog", "-p", "../prebuilt/butterstick_r1d0_bootloader.dfu"])
         finish('PASS')
-        sys.exit(0)
+    else:
+        finish('FAIL')
 
 except subprocess.CalledProcessError:
     finish('FAIL')
-finish('FAIL')
-sys.exit(0)
